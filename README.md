@@ -1,8 +1,8 @@
 # FileSplitter
 Utility that splits a file into a manageable chunks
 
-###Created By: Tim Flucker
-###Last Updated : 12/12/2018 
+### Created By: Tim Flucker
+### Last Updated : 12/12/2018 
 
 Features: 
 
@@ -12,4 +12,6 @@ Features:
 
 Changelog: 
 
-12/ 
+12/09/2018 : Initial commit
+
+12/12/2018 : Added functionality to save files as zip entries
