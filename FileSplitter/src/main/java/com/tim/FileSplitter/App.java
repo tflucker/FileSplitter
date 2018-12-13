@@ -22,8 +22,7 @@ public class App {
 	 * 
 	 * Concerns:
 	 * 
-	 * 1. data loss when recombining files 
-	 * 2. sending email from java? 3. how to
+	 * 1. data loss when recombining files 2. sending email from java? 3. how to
 	 * initiate file recombine
 	 * 
 	 * STARTING POINT
@@ -35,22 +34,26 @@ public class App {
 	 * 
 	 */
 
+	static String filePath = "C:\\Users\\Tim Flucker\\Desktop\\TestFile.txt";
+	static String destination = "C:\\Users\\Tim Flucker\\Desktop\\FileSplitter\\";
+
 	public static void main(String[] args) throws IOException {
-		String path = "C:\\Users\\user.name\\Desktop\\TestFile.txt";
-		String destination = "C:\\Users\\user.name\\Desktop\\FileSplitter\\";
 
-		int numOfSplits = 10;
-		File file = new File(path);
+		File file = new File(filePath);
 		RandomAccessFile raf = new RandomAccessFile(file, "r");
-
-		System.out.println("Generating filename convention ...");
-		String fileNameAndPath = FileSplitterUtil.createDestinationFilename(path, destination);
-		String fileExtension = FileSplitterUtil.getFileExtension(path);
+		
+		int numOfSplits = 4;
+		boolean saveToZip = true;
+		
+		System.out.println("Parsing file information ...");
+		FileSplitterUtil.setConstants(filePath, destination);
 
 		System.out.println("Splitting files ...");
-		FileSplitterUtil.splitFile(raf, numOfSplits, fileNameAndPath, fileExtension);
+		FileSplitterUtil.splitFile(raf, numOfSplits, saveToZip);
 
 		System.out.println("--- Process complete ---");
 
 	}
+
+
 }
