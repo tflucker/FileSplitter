@@ -12,13 +12,19 @@ public class App {
 	 * 
 	 * IDEA: Take any file (Ex. email attachment that is too large
 	 * 
-	 * 1. split file into manageable chunks ---------DONE
+	 * + split file into manageable chunks ---------DONE
+	 * + compile in zip file ---- DONE
+	 * + Cleanup and remove old / unused methods 
+	 * + Recombine file from chunks, verify no data loss
+	 * + Handle other file types besides text ???
+	 * + Improve logging message (custom exceptions?)
 	 * 
-	 * 2. compile in zip file
+	 * + Integrate into email client?
 	 * 
-	 * 3. send file attached to email
+	 * 6. Encrypt data for security (Base64)
 	 * 
-	 * 4. Recombine file from chunks
+	 * TODO:
+	 * 1. send file attached to email
 	 * 
 	 * Concerns:
 	 * 
@@ -40,14 +46,18 @@ public class App {
 	public static void main(String[] args) throws IOException {
 
 		File file = new File(filePath);
+		System.out.println("File length: " + file.length());
 		RandomAccessFile raf = new RandomAccessFile(file, "r");
 		
-		int numOfSplits = 4;
-		boolean saveToZip = true;
+		int numOfSplits = 5;
+		boolean saveToZip = false;
 		
 		System.out.println("Parsing file information ...");
 		FileSplitterUtil.setConstants(filePath, destination);
 
+		System.out.println("Saving original file ...");
+		FileSplitterUtil.saveOrignalFileToSplitDestination(filePath);
+		
 		System.out.println("Splitting files ...");
 		FileSplitterUtil.splitFile(raf, numOfSplits, saveToZip);
 
