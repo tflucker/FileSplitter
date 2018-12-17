@@ -1,10 +1,17 @@
 package com.tim.FileSplitter.util;
 
 import java.io.BufferedOutputStream;
+import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.nio.file.Files;
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -34,10 +41,12 @@ public class FileSplitterUtil {
 		long remainingBytes = fileLength % numOfSplits;
 
 		int maxReadBufferSize = 8 * 1024;
-
 		BufferedOutputStream bw = null;
 		ZipOutputStream out = null;
 
+		System.out.println("Expected bytes per split: "+bytesPerSplit);
+		System.out.println("Expected bytes for leftover file: "+ remainingBytes);
+		
 		if (saveToZip) {
 			File zip = new File(outputDestination + sourceFilename + "-split.zip");
 			out = new ZipOutputStream(new FileOutputStream(zip));
@@ -55,16 +64,17 @@ public class FileSplitterUtil {
 				System.out.println("Creating new file: " + filename);
 				bw = new BufferedOutputStream(new FileOutputStream(filename));
 			}
-
+			long bytesRead = 0L;
 			if (bytesPerSplit > maxReadBufferSize) {
 				long numReads = bytesPerSplit / maxReadBufferSize;
 				long numRemainingRead = bytesPerSplit % maxReadBufferSize;
 				for (int i = 0; i < numReads; i++) {
 					if (saveToZip) {
-						readWriteToZip(raf, out, numRemainingRead);
+						readWriteToZip(raf, out, maxReadBufferSize);
 					} else {
-						readWrite(raf, bw, numRemainingRead);
+						readWrite(raf, bw, maxReadBufferSize);
 					}
+					bytesRead = bytesRead + maxReadBufferSize;
 				}
 				if (numRemainingRead > 0) {
 					if (saveToZip) {
@@ -72,6 +82,7 @@ public class FileSplitterUtil {
 					} else {
 						readWrite(raf, bw, numRemainingRead);
 					}
+					bytesRead = bytesRead + numRemainingRead;
 				}
 			} else {
 				if (saveToZip) {
@@ -79,16 +90,20 @@ public class FileSplitterUtil {
 				} else {
 					readWrite(raf, bw, bytesPerSplit);
 				}
+				bytesRead = bytesRead + bytesPerSplit;
 			}
 			if (saveToZip) {
 				out.closeEntry();
 			}
+			bw.close();
+			System.out.println("Length of "+ filename + ", length: "+ bytesRead);
 		}
-
+		
 		if (remainingBytes > 0) {
 			System.out.println("Creating file to handle leftovers...");
 			if (saveToZip) {
 				ZipEntry e = new ZipEntry(sourceFilename + "-split_" + (numOfSplits + 1) + fileExtension);
+				System.out.println("Creating new file for zip: " + e.getName());
 				out.putNextEntry(e);
 				readWriteToZip(raf, out, remainingBytes);
 				out.closeEntry();
@@ -96,47 +111,19 @@ public class FileSplitterUtil {
 			} else {
 				bw = new BufferedOutputStream(new FileOutputStream(
 						outputDestination + sourceFilename + "-split_" + (numOfSplits + 1) + fileExtension));
+				System.out.println("Creating new file: " + outputDestination + sourceFilename + "-split_"
+						+ (numOfSplits + 1) + fileExtension);
 				readWrite(raf, bw, remainingBytes);
 				bw.close();
 			}
 		}
+		bw.close();
 		raf.close();
 
-	}
-
-	public static void splitFileBackup(RandomAccessFile raf, int numOfSplits, boolean saveToZip) throws IOException {
-
-		long fileLength = raf.length();
-		long bytesPerSplit = fileLength / numOfSplits;
-		long remainingBytes = fileLength % numOfSplits;
-
-		int maxReadBufferSize = 8 * 1024;
-
-		for (int destIndex = 1; destIndex <= numOfSplits; destIndex++) {
-			String filename = outputDestination + "-split_" + destIndex + fileExtension;
-			System.out.println("Creating new file: " + filename);
-			BufferedOutputStream bw = new BufferedOutputStream(new FileOutputStream(filename));
-			if (bytesPerSplit > maxReadBufferSize) {
-				long numReads = bytesPerSplit / maxReadBufferSize;
-				long numRemainingRead = bytesPerSplit % maxReadBufferSize;
-				for (int i = 0; i < numReads; i++) {
-					readWrite(raf, bw, numRemainingRead);
-				}
-				if (numRemainingRead > 0) {
-					readWrite(raf, bw, numRemainingRead);
-				}
-			} else {
-				readWrite(raf, bw, bytesPerSplit);
-			}
-			bw.close();
+		if (!saveToZip) {
+			reconstructOriginalFile(outputDestination, sourceFilename + "-reconstructed" + fileExtension);
 		}
 
-		if (remainingBytes > 0) {
-			BufferedOutputStream bw = new BufferedOutputStream(new FileOutputStream("split." + (numOfSplits + 1)));
-			readWrite(raf, bw, remainingBytes);
-			bw.close();
-		}
-		raf.close();
 	}
 
 	public static void readWrite(RandomAccessFile raf, BufferedOutputStream bw, long numBytes) throws IOException {
@@ -155,14 +142,54 @@ public class FileSplitterUtil {
 		}
 	}
 
-	public static String createDestinationFilename(String path, String destination) {
-		String filename = StringUtils.substring(path, path.lastIndexOf('\\') + 1);
-		filename = StringUtils.substring(filename, 0, filename.lastIndexOf('.'));
-		return destination + filename;
+	public static void reconstructOriginalFile(String splitLocation, String newFilename) throws IOException {
+		System.out.println("Reconstructing file ...");
+		File splitDir = new File(splitLocation);
+		File newFile = new File(splitLocation + newFilename);
+
+		FileInputStream fin = null;
+		BufferedOutputStream bw = new BufferedOutputStream(new FileOutputStream(newFile));
+
+		int chunkSize = 8 * 1024;
+		List<File> fileList = Arrays.asList(splitDir.listFiles()).stream().filter(f -> f.getName().contains("-split_"))
+				.collect(Collectors.toList());
+		for (File fileEntry : fileList) {
+			System.out.println("Reading file: " + fileEntry.getName());
+			System.out.println("Size of file: " + fileEntry.length());
+			long numReads = fileEntry.length() / Long.valueOf(chunkSize);
+			long remainingBytes = fileEntry.length() % Long.valueOf(chunkSize);
+			fin = new FileInputStream(fileEntry);
+			long bytesRead = 0L;
+			if (fileEntry.length() > Long.valueOf(chunkSize)) {
+				for (long i = 0L; i < numReads; i++) {
+					byte[] bytes = new byte[chunkSize];
+					fin.read(bytes);
+					bw.write(bytes);
+					bytesRead = bytesRead + chunkSize;
+				}
+			}
+			if (remainingBytes > 0L) {
+				byte[] bytes = new byte[(int) remainingBytes];
+				fin.read(bytes);
+				bw.write(bytes);
+				bytesRead = bytesRead + remainingBytes;
+
+			}
+			fin.close();
+			System.out.println("Bytes read: "+ bytesRead);
+		}
+		bw.close();
 	}
 
-	public static String getFileExtension(String filename) {
-		return StringUtils.substring(filename, filename.lastIndexOf('.'));
+	public static void saveOrignalFileToSplitDestination(String sourcePath) throws IOException {
+		File originalFile = new File(sourcePath);
+		System.out.println("Copy of Original file length: " + originalFile.length());
+		BufferedOutputStream bw = new BufferedOutputStream(
+				new FileOutputStream(outputDestination + sourceFilename + "-original" + fileExtension));
+
+		Files.copy(originalFile.toPath(), bw);
+		bw.close();
+
 	}
 
 }
